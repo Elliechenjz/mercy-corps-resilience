@@ -1,0 +1,791 @@
+---
+title: "Policy lab"
+author: "Ellie Chen, Desiree Becerra, Isabela Fonseca"
+output: 'Analysis of social cohesion and social connectedness'
+date: "2023-01-17"
+---
+
+***I completed this project with Desiree Becerra and Isabela Fonseca. Coding decisions are made based on thorough understanding of the SRLC survey data.***
+```{r setup, include=FALSE}
+library(tidyverse)
+library(haven)
+library(rstudioapi) # To change directory
+library(tidyr)
+library(Hmisc)
+library(dplyr)
+library(naniar)
+library(corrplot)
+library(vtable)
+library(labelled)
+library(psych)
+library(caret)
+library(gtools)
+library(ltm)
+
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+# Remove all
+rm(list = ls())
+
+# Set working directory to source file location
+setwd(dirname(getActiveDocumentContext()$path)) 
+getwd()
+
+wave_4 <- read_dta("./Data/Raw data/UG_Dataset_Wave4_Raw.dta")
+wave_1_to_3 <- read_dta("./Data/Raw data/UG_Dataset_Wave1_3_Combined.dta")
+
+```
+
+# Variables 
+
+```{r}
+names <- setNames(stack(lapply(wave_4, label))[2:1],
+                  c('Varcode', 'Variables'))
+
+# write.csv(names, file = "label_questions.csv")
+```
+
+## Separating different waves
+
+```{r}
+wave_3_subset <- wave_1_to_3 %>%
+  filter(wave==3) %>%
+  dplyr::select(c(hhid, starts_with("B")))
+
+wave_2_subset <- wave_1_to_3 %>%
+  filter(wave==2) %>%
+  dplyr::select(c(hhid, starts_with("B")))
+
+wave_1_subset <- wave_1_to_3 %>%
+  filter(wave==1) %>%
+  dplyr::select(c(hhid, starts_with("B")))
+
+wave_4 <- left_join(wave_4, wave_3_subset, by="hhid", suffix= c("","_w3"))
+
+wave_4 <- left_join(wave_4, wave_2_subset, by="hhid", suffix= c("","_w2"))
+
+wave_4 <- left_join(wave_4, wave_1_subset, by="hhid", suffix= c("","_w1"))
+```
+
+
+## Data cleaning 
+
+```{r}
+
+# Include id as rownames
+wave_4 <- wave_4 %>% 
+  group_by(hhid) %>%
+  mutate(p_id = as.character(row_number(hhid))) %>%
+  ungroup()
+  
+wave_4$hhid <- as.character(wave_4$hhid)
+wave_4$unique_id <- paste(wave_4$hhid, wave_4$p_id, sep='.')
+
+# Creates index with unique id
+rownames(wave_4) <- wave_4$unique_id
+
+wave_4_filter <- wave_4 %>%
+  dplyr::select(c('hhid':'C13', starts_with("E4"), starts_with("B"), 'M8A':'M18', starts_with("E3"), 
+                  'D1':'D12', starts_with("DA"), starts_with("F"), 'p_id', 'unique_id', 
+                  'H1', 'H2', 'H13','H17', 'H22A', 'H22B', starts_with("G"), starts_with("I"))) %>%
+  mutate_if(is.numeric , ~na_if(.x, 999)) %>% # I don't know
+  mutate_if(is.numeric , ~na_if(.x, 888)) %>% # Doesn't apply
+  mutate_if(is.numeric , ~na_if(.x, 777)) # Don't want to respond
+
+```
+
+
+
+## Index creation
+
+```{r}
+
+### Social connectedness
+
+wave_4_filter <- wave_4_filter %>%
+  rowwise() %>%
+  mutate(# People that you can turn or help (for the diversity index)
+         M9A_num = sum(c(M9A_1, M9A_2, M9A_3, M9A_4, M9A_5, M9A_6, M9A_7,
+                                 M9A_8, M9A_9, M9A_11), na.rm = TRUE),
+         M10B_num = sum(c(M10B_11, M10B_1, M10B_2, M10B_3, M10B_4, M10B_5, 
+                           M10B_6, M10B_7, M10B_8, M10B_9, M10B_11), na.rm = TRUE),
+         # types of help that you have given or receive (for the resources index)
+         M12A_num = sum(c(M12A_1, M12A_2, M12A_3, M12A_4, M12A_5, M12A_6, 
+                         M12A_7, M12A_8, M12A_9, M12A_10, M12A_11, M12A_12, 
+                         M12A_13, M12A_14), na.rm = TRUE), 
+         M12B_num = sum(c(M12B_1, M12B_2, M12B_3, M12B_4, M12B_5, M12B_6, 
+                          M12B_7, M12B_8, M12B_9, M12B_10, M12B_11, M12B_12, 
+                          M12B_13, M12B_14), na.rm = TRUE)) %>%
+  ungroup %>%
+  mutate(# Re-scaling from low to high 
+         M13A_res = 1 - ((M13A-1)/3),
+         M13B_res = 1 - ((M13B-1)/3),
+         M8B_res = 1 - ((M8B-1)/3),
+         M8C_res = 1 - ((M8C-1)/3),
+         # Center and scaling 
+         M13A_C = scale(M13A_res, center = TRUE, scale = TRUE),
+         M13B_C = scale(M13B_res, center = TRUE, scale = TRUE),
+         M8A_C = scale(M8A, center = TRUE, scale = TRUE),
+         M8B_C = scale(M8B_res, center = TRUE, scale = TRUE),
+         M8C_C = scale(M8B_res, center = TRUE, scale = TRUE),
+         M9A_C = scale(M9A_num, center = TRUE, scale = TRUE),
+         M10B_C = scale(M10B_num, center = TRUE, scale = TRUE),
+         M12A_C = scale(M12A_num, center = TRUE, scale = TRUE),
+         M12B_C = scale(M12B_num, center = TRUE, scale = TRUE),
+         M11_C = scale(M11, center = TRUE, scale = TRUE)) %>%
+  rename(reliability = M11_C) %>%
+  rowwise() %>%
+  # Index construction
+  mutate(# number = number of people in your network adjusted between 0-1
+         number = sum(c(M8A_C, M8B_C), na.rm = TRUE),
+         number_2 = sum(c(M8A_C, M8B_C, M8C_C), na.rm = TRUE),
+         # Dynamics = how your network or your ability to get help change (more implies growth)
+         dynamics = sum(c(M13A_C, M13B_C), na.rm = TRUE),
+         #Diversity
+         diversity = sum(c(M9A_C, M10B_C), na.rm = TRUE), 
+         # Resources 
+         resources = sum(c(M12A_C, M12B_C), na.rm = TRUE)) %>%
+    ungroup
+         
+
+### Social cohesion
+
+wave_4_filter <- wave_4_filter %>%
+  mutate(#Centering and scaling
+         M14_C = scale(M14, center = TRUE, scale = TRUE),
+         M15_C = scale(M15, center = TRUE, scale = TRUE),
+         M16_C = scale(M16, center = TRUE, scale = TRUE),
+         M17_C = scale(M17, center = TRUE, scale = TRUE),
+         M18_C = scale(M18, center = TRUE, scale = TRUE)) %>% 
+  rowwise() %>%
+  # Index creation 
+  mutate(# Creating index
+         closeness_village = round(mean(c(M14_C, M15_C), na.rm = TRUE), 2),
+         # Ethnicity
+         attitudes_trust_other_ethnics = round(mean(c(M17_C, M18_C, M16_C), na.rm = TRUE), 2),
+         attitudes_other_ethnics = round(mean(c(M17_C, M18_C), na.rm = TRUE), 2),
+         trust_other_ethnics = round(mean(c(M16_C), na.rm = TRUE), 2),) %>%
+  ungroup
+
+
+### Food security
+
+wave_4_filter <- wave_4_filter %>%
+  mutate(# Beans, nuts, fish, meat, egg
+         protein = case_when((E3_C >= 2 |  E3_G  >= 2 | E3_H  >= 2 | E3_I  >= 2) ~ 1, 
+                              (E3_C < 2 |  E3_G  < 2 | E3_H  < 2 | E3_I  < 2) ~ 0),
+          # grains 
+         grains = case_when((E3_A >= 2) ~ 1, 
+                            (E3_A < 2 ) ~ 0),
+         # dairy
+         dairy = case_when((E3_J >= 2) ~ 1, 
+                            (E3_J < 2 ) ~ 0),
+         # vegetables, roots and tuber
+         vegetables = case_when((E3_B >= 2 | E3_D >= 2) ~ 1,
+                                (E3_B < 2 | E3_D < 2) ~ 0),
+         # fruits
+         fruits = case_when((E3_E >= 2) ~ 1,
+                            (E3_B < 2) ~ 0),
+          # Variables for the FCI
+         staples_fci = round(mean(c(E3_A, E3_B), na.rm = TRUE), 0), 
+         pulses_fci = E3_C,
+         vegetables_fci = E3_D,
+         fruits_fci = E3_E,
+         meat_fci = round(mean(c(E3_G, E3_H, E3_I), na.rm = TRUE), 0),
+         dairy_fci = E3_J,
+         fats_fci = E3_L,
+         sugar_fci = E3_K) %>%
+  rowwise() %>%
+  mutate(
+         # diversity
+         diversity_food = sum(c(protein, grains, dairy, vegetables, fruits), na.rm = TRUE),
+         # FCI (Food Consumption Index)
+         fci = staples_fci*2 + pulses_fci*3 + vegetables_fci + fruits_fci + meat_fci*4 + dairy_fci*4 + fats_fci*0.5 + sugar_fci*0.5) %>%
+  ungroup
+
+
+### Livelihood
+
+# Access: Education, Water, Health 
+
+wave_4_filter <- wave_4_filter %>%
+   mutate(#Centering and scaling
+         H17_C = scale(H17, center = TRUE, scale = TRUE),
+         H1_C = scale(H1, center = TRUE, scale = TRUE),
+         H2_C = scale(H2, center = TRUE, scale = TRUE),
+         H22A_C = scale(H22A, center = TRUE, scale = TRUE),
+         H22B_C = scale(H22A, center = TRUE, scale = TRUE)) %>%
+  rename(water = H17_C) %>%
+  rowwise() %>%
+  mutate(health = round(mean(c(H1, H2), na.rm = TRUE), 2),
+         education = round(mean(c(H22A, H22B), na.rm = TRUE), 2),
+         access_services = round(mean(c(water, health, education), na.rm = TRUE), 2)) %>%
+  ungroup
+
+  
+# Assets: Livestock ownership 
+wave_4_filter <- wave_4_filter %>%
+    rowwise() %>%
+  mutate(# Live stock measured by  Tropical Livestock Units per capital
+         livestock_ownership = (F14_A_quantity * 0.01) + (F14_B_quantity * 0.15) + (F14_C_quantity * 0.4)) %>%
+  ungroup
+
+
+# Employment and remmitances:
+wave_4_filter <- wave_4_filter %>%
+  mutate(# Remittance as an additional variable
+         remittances = DA15,
+         remittances = coalesce(remittances, 0)) %>%
+  rowwise() %>%
+  mutate(income_sources = sum(c(D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11, D12), na.rm=TRUE)) %>%
+  ungroup
+
+### Subjective resilience
+
+wave_4_filter <- wave_4_filter %>%
+  mutate(#Centering and scaling
+         E4_A_C = scale(E4_A, center = TRUE, scale = TRUE),
+         E4_B_C = scale(E4_B, center = TRUE, scale = TRUE),
+         E4_C_C = scale(E4_C, center = TRUE, scale = TRUE)) %>%
+  rowwise() %>%
+  mutate(subjective_resilience = round(mean(c(E4_A_C, E4_B_C, E4_C_C), na.rm = TRUE), 2)) %>%
+  ungroup()
+  
+  
+### Shock: Climate/Economic/Crime
+
+wave_4_filter <- wave_4_filter %>% 
+           mutate(
+                  # Climate shock
+                  G1 = G1A*G1B,    # Clm: disease of crops or livestock
+                  G2 = G2A*G2B,    # Clm: bad weather
+                  G3 = G3A*G3B,    # Clm: fire in house
+                  
+                  #Economic Shock
+                  G4 = G4A*G4B,    # econ: sudden health problem
+                  G5 = G5A*G5B,    # econ: longterm health problem
+                  G6 = G6A*G6B,    # econ: death in-family
+                  G7 = G7A*G7B,    # econ: inflation/price hikes
+                  G8 = G8A*G8B,    # econ: job loss
+                  G9 = G9A*G9B,    # econ: land dispute
+                  G10 = G10A*G10B, # other shocks (maybe no)
+
+                  # crime/conflict Shock
+                  G18 = G18A*G18B, # verbal threats
+                  G19 = G19A*G19B, # theft
+                  G20 = G20A*G20B, # burglary
+                  G21 = G21A*G21B, # abduction of family member
+                  G22 = G22A*G22B, # murder
+                  G23 = G23A*G23B, # theft of livestock
+                  G24 = G24A*G24B, # serious harm
+                  G25 = G25A*G25B, # land grabbing
+                  G26 = G26A*G26B, # sexual assault
+                  G27 = G27A*G27B, # physical assault
+                  G28 = G28A*G28B, # witchcraft
+                  G29 = G29A*G29B  # poisoning
+                                                        ) %>%
+     rowwise() %>% 
+     mutate(climate_shock  = sum(c(G1, G2, G3), na.rm = TRUE),
+            economic_shock = sum(c(G4, G5, G6, G7, G8, G9, G10),
+                                                   na.rm = TRUE),
+            conflict_shock  = sum(c(G18, G19, G20, G21, G22, G23, 
+                                                 G24, G25, G26, G27, G28, G29), 
+                                                 na.rm = TRUE)) %>%
+     ungroup()
+
+
+### Safety
+
+wave_4_filter <-  wave_4_filter %>% 
+                     mutate(
+                            # safety-neighborhood
+                            G11 = case_when(G11 == 4 ~ 1, G11 == 3 ~ 2,
+                                            G11 == 2 ~ 3, G11 == 1 ~ 4),
+                            # safety-moving
+                            G13 = case_when(G13 == 4 ~ 1, G13 == 3 ~ 2,
+                                            G13 == 2 ~ 3, G13 == 1 ~ 4),
+                            # safety- go to neighboring ethnic groups
+                            G15 = case_when(G15 == 4 ~ 1, G15 == 3 ~ 2, 
+                                            G15 == 2 ~ 3, G15 == 1 ~ 4),
+                            #Centering and scaling
+                            G11_C = scale(G11, center = TRUE, scale = TRUE),
+                            G13_C = scale(G13, center = TRUE, scale = TRUE),
+                            G15_C = scale(G15, center = TRUE, scale = TRUE)) %>%
+                     rowwise() %>%
+                     mutate(G17_n = sum(c(G17_A, G17_B, G17_C, G17_D, G17_E), na.rm = TRUE),
+                            # gender-based threats
+                            G17 = G16*G17_n,
+                            safety_index = sum(c(G11_C, G13_C, G15_C, G17), na.rm = TRUE)) %>%
+                    ungroup()
+
+### Aid index
+wave_4_filter <- wave_4_filter %>% 
+  mutate(# frequency of receiving aid (to be multiplied by amount --> for aid_amount index)
+                            I1C = case_when(I1C == 1 ~ 12, I1C == 2 ~ 4,
+                                            I1C == 3 ~ 1, I1C == 4 ~ 1),
+                            I3C = case_when(I3C == 1 ~ 12, I3C == 2 ~ 4,
+                                            I3C == 3 ~ 1, I3C == 4 ~ 1),
+                            I5C = case_when(I5C == 1 ~ 12, I5C == 2 ~ 4, 
+                                            I5C == 3 ~ 1, I5C == 4 ~ 1),
+                            I6C = case_when(I6C == 1 ~ 12, I6C == 2 ~ 4, 
+                                            I6C == 3 ~ 1, I6C == 4 ~ 1),
+                            #Centering and scaling
+                            I1C_C = scale(I1C, center = TRUE, scale = TRUE),
+                            I3C_C = scale(I3C, center = TRUE, scale = TRUE),
+                            I5C_C = scale(I5C, center = TRUE, scale = TRUE),
+                            I6C_C = scale(I6C, center = TRUE, scale = TRUE)) %>% 
+    mutate_at(c("I1A", "I1C_C", "I1D",
+                "I3A", "I3C_C", "I3D",
+                "I5A", "I5C_C", "I5D", 
+                "I6A", "I6C_C", "I6D"), ~replace_na(.,0)) %>% # impute o to respondent who did not receive aid
+  mutate(
+         # aid_types: how many types of aid respondents are getting in the last year
+         aid_types = I1A  + I3A +  I5A + I6A, # No I2A&I4A 
+         
+         # aid_amount:amount received last year
+         aid_amount = I1A*I1C_C*I1D + I3A*I3C_C*I3D + I5A*I5C_C*I5D + I6A*I6C_C*I6D)  
+
+wave_4_filter <- wave_4_filter %>% 
+  mutate(aid_amount_shrink = (I1A*I1C_C*I1D + I3A*I3C_C*I3D + I5A*I5C_C*I5D + I6A*I6C_C*I6D)/1000000)
+
+```
+
+# Type of resident
+
+
+#Morris Index
+
+```{r}
+wave_4_filter <- wave_4_filter %>%
+       mutate(across(starts_with("F1") & contains("A")& - contains("quantity"), replace_na, 0))
+       
+#transforming to binary own (1) or don't own (0)
+wave_4_filter <- wave_4_filter %>%
+  mutate(F1_bi = ifelse(F1 == 1, 1, 0)) 
+
+  #access to land - different than do file
+wave_4_filter <- wave_4_filter %>%
+  mutate(F6_bi = ifelse(F6 == 1, 1, 0)) #own land - Different from do file
+wave_4_filter <- wave_4_filter %>%
+  mutate(F10_bi = ifelse(F10 == 1, 1, 0)) #rent land - Different from do file
+
+#source of drinking water, recoding as good (1) or bad (0)
+wave_4_filter <- wave_4_filter %>%
+  mutate(H13_bi = ifelse(H13 %in% c(1,3,5), 1, 0))
+
+
+morris_index_vars <- c(
+  "F1_bi", #own dwelling
+  "F6_bi", #own land
+  "F10_bi", #rent land
+  "H13_bi", #clean water
+  "F13_A", #mobile phone
+  "F13_B", #generator
+  "F13_C", #RADIO
+  "F13_D", #MATTRESS
+  "F13_E", #SOLAR PANEL
+  "F16_A", #HAND TOOLS DIGGING
+  "F16_B", #HAND TOOLS CUTTING
+  "F16_C", #PLOUGH
+  "F16_D", #POWERED MACHINES
+  "F17_A", #BICYCLES AND WHEELBARROWS
+  "F17_B", #DONKEY OR OXEN
+  "F17_C")
+
+wave_4_filter$morris_index_total <- 0  # create a new column for morris_index_total
+
+#create morris index total
+for (var in morris_index_vars) {  # loop over variables in the morris_index_vars vector
+  var_mean <- mean(wave_4_filter[[var]], na.rm = TRUE)  # calculate the mean of the current variable
+  wave_4_filter$morris_index_total <- wave_4_filter$morris_index_total + (wave_4_filter[[var]] / var_mean)  # update morris_index_total by adding the normalized variable
+}
+
+#create morris index for assets only
+
+morris_index_vars_assets <- c(
+                              "F13_A", #mobile phone
+                              "F13_B", #generator
+                              "F13_C", #RADIO
+                              "F13_D", #MATTRESS
+                              "F13_E", #SOLAR PANEL
+                              "F16_A", #HAND TOOLS DIGGING
+                              "F16_B", #HAND TOOLS CUTTING
+                              "F16_C", #PLOUGH
+                              "F16_D", #POWERED MACHINES
+                              "F17_A", #BICYCLES AND WHEELBARROWS
+                              "F17_B", #DONKEY OR OXEN
+                              "F17_C")
+
+wave_4_filter$morris_index_assets <- 0
+
+for (var in morris_index_vars_assets) {  # loop over variables in the morris_index_vars vector
+  var_mean <- mean(wave_4_filter[[var]], na.rm = TRUE)  # calculate the mean of the current variable
+  wave_4_filter$morris_index_assets <- wave_4_filter$morris_index_assets + (wave_4_filter[[var]] / var_mean)  # update morris_index_assets by adding the normalized variable
+}
+
+for (var in morris_index_vars) {
+ var_mean <- mean(wave_4_filter[[var]], na.rm = TRUE) 
+   wave_4_filter[[var]][is.na(wave_4_filter[[var]])] <- var_mean
+}
+
+```
+
+# Controls
+
+```{r}
+
+# Gender of household head
+
+wave_4_filter <- wave_4_filter %>%
+  mutate(hohh_gender_female = ifelse(C2a==1 & C4 ==0, 0, ifelse(C2a==1 & C4 == 1, 1,"na")))
+
+# Number of people in the household
+
+wave_4_filter <- wave_4_filter %>%
+  mutate(other_country = coalesce(case_when(DA5 <= 3 ~ 0,
+                                            DA5 > 3 ~ 1), 0),
+         member_abroad = DA1) %>%
+  group_by(hhid) %>%
+  mutate(n_household = sum(wave)) %>%
+  ungroup
+  
+```
+
+## Checking internal consistency (Cronbach alpha)
+
+```{r}
+### Social connectedness
+
+#### i. number
+cronbach.alpha(wave_4_filter[, c('M8A_C', 'M8B_C')], na.rm = TRUE, CI=TRUE)
+cronbach.alpha(wave_4_filter[, c('M8A_C', 'M8B_C', 'M8C_C')], na.rm = TRUE, CI=TRUE)
+
+#### ii. Dynamics
+cronbach.alpha(wave_4_filter[, c('M13A_C', 'M13B_C')], na.rm = TRUE, CI=TRUE)
+
+#### iii. Diversity
+cronbach.alpha(wave_4_filter[, c('M9A_C', 'M10B_C')], na.rm = TRUE, CI=TRUE)
+
+### iv. Resources
+cronbach.alpha(wave_4_filter[, c('M12A_C', 'M12B_C')], na.rm = TRUE, CI=TRUE)
+
+
+### Social cohesion
+
+#### i. attitudes_trust_other_ethnics
+cronbach.alpha(wave_4_filter[, c('M16_C', 'M17_C', 'M18_C')], na.rm = TRUE, CI=TRUE)
+cronbach.alpha(wave_4_filter[, c('M17_C', 'M18_C')], na.rm = TRUE, CI=TRUE)
+
+
+#### ii. closeness_village
+cronbach.alpha(wave_4_filter[, c('M14_C', 'M15_C')], na.rm = TRUE, CI=TRUE)
+
+### Food security 
+
+#### i. Diversity food
+cronbach.alpha(wave_4_filter[, c('protein', 'grains', 'dairy', 'vegetables', 'fruits')], na.rm = TRUE, CI=TRUE)
+
+#### ii. FCI
+cronbach.alpha(wave_4_filter[, c('staples_fci', 'pulses_fci', 'vegetables_fci', 
+                                 'fruits_fci', 'meat_fci', 'dairy_fci', 'fats_fci')],
+               na.rm = TRUE, CI=TRUE)
+
+### Livelihood
+
+#### i. Service access
+cronbach.alpha(wave_4_filter[, c('water', 'health', 'education')], na.rm = TRUE, CI=TRUE)
+cronbach.alpha(wave_4_filter[, c('water', 'H1_C', 'H2_C', 'H22A_C', 'H22B_C')], na.rm = TRUE, CI=TRUE)
+
+#### iv. Income sources
+cronbach.alpha(wave_4_filter[, c('D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8',
+                                 'D9', 'D10', 'D11', 'D12')], na.rm = TRUE, CI=TRUE)
+
+
+### Subjective resilience
+
+cronbach.alpha(wave_4_filter[, c('E4_A', 'E4_B', 'E4_C')], na.rm = TRUE, CI=TRUE)
+
+
+```
+
+## Creating indicators by households
+
+```{r}
+wave_4_filter <- wave_4_filter %>% 
+        rename("district" = "A9a",
+               "subcounty" = "A9b")
+               
+write.csv(wave_4_filter, file = "./Data/Clean data/wave_4_individuals.csv")
+
+# Average the indicators by households
+
+wave_4_filter_hh <- wave_4_filter %>%
+  filter(C5 > 12) %>% # Think in why less than 14
+  group_by(hhid) %>%
+  dplyr::select(number, dynamics, diversity, resources, reliability, 
+                closeness_village, attitudes_trust_other_ethnics, 
+                attitudes_other_ethnics, subjective_resilience, 
+                livestock_ownership, fci, diversity_food, remittances,
+                access_services, income_sources, climate_shock, economic_shock,
+                conflict_shock, safety_index, morris_index_total, 
+                morris_index_assets, native, migrated, returnee,
+                hohh_gender_female, 
+                aid_amount_shrink, aid_types, district, subcounty, n_household, 
+                other_country, member_abroad) %>%
+  summarise(across(everything(), .f = list(mean = mean, sd = sd), na.rm = TRUE)) %>%
+  ungroup %>%
+  mutate_all(~ifelse(is.nan(.), NA, .)) %>%
+  mutate(hohh_gender_female_mean = case_when(hohh_gender_female_mean == 0 ~ 0,
+                                             hohh_gender_female_mean > 0 ~ 1),
+         member_abroad_mean = case_when(member_abroad_mean == 0 ~ 0,
+                                        member_abroad_mean > 0 ~ 1))
+
+colnames(wave_4_filter_hh) <- gsub("_mean", "", colnames(wave_4_filter_hh))
+     
+# mean = mean by household
+# sd = intra household sd 
+
+write.csv(wave_4_filter_hh, file = "./Data/Clean data/wave_4_indicators_byhousehold.csv")
+
+```
+
+# Descriptive
+
+```{r}
+
+sum_stats <- describe(wave_4_filter_hh, na.rm=FALSE, skew = FALSE)
+
+missing <- as.data.frame(sapply(wave_4_filter_hh, function(x) sum(is.na(x))))
+
+sum_stats <- cbind(sum_stats, missing)
+
+colnames(sum_stats) <- c('','Obs', 'Mean', 'SD', 'Min', 'Max', 'Range', 'SE', 'Missing Obs')
+  
+sum_stats <- sum_stats[, c(1, 2, 9, 3, 4, 5, 6, 7, 8)]
+
+#sum_stats <- knitr::kable(sum_stats[-c(1)],
+#                      caption = 'Summary statistics',
+#                      align = "ccc",
+#                      digits = 2)
+
+write.csv(sum_stats, file = "./Results/summary_stats_2_23.csv")
+
+```
+
+
+# Correlations
+
+```{r}
+wave_4_filter_ques <- wave_4_filter %>%
+  filter(C5 > 12) %>% # Think in why less than 14
+  dplyr::select('M13A_res', 'M13B_res', 'M8B_res', 'M8C_res', 'M9A_1', 'M9A_2', 'M9A_3', 'M9A_4', 'M9A_5', 
+                'M9A_6', 'M9A_7','M9A_8', 'M9A_9', 'M10B_11', 'M10B_1', 'M10B_2', 'M10B_3', 'M10B_4', 'M10B_5', 
+                'M10B_6', 'M10B_7', 'M10B_8', 'M10B_9', 'M10B_11', 'M16_new', 'M17', 'M18', 
+                'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11', 'D12', 'DA15')
+
+sum_stats <- describe(wave_4_filter_ques, na.rm=FALSE, skew = FALSE)
+
+missing <- as.data.frame(sapply(wave_4_filter_ques, function(x) sum(is.na(x))))
+
+sum_stats <- cbind(sum_stats, missing)
+
+colnames(sum_stats) <- c('','Obs', 'Mean', 'SD', 'Min', 'Max', 'Range', 'SE', 'Missing Obs')
+  
+sum_stats <- sum_stats[, c(1, 2, 9, 3, 4, 5, 6, 7, 8)]
+
+sum_stats
+```
+
+# Questions 
+
+## Question 2: Do social connectedness and cohesion associate with wellbeing (as measured in Wave 4)?
+
+```{r, echo=FALSE, results='asis'}
+
+# Function
+
+regression_q2 <- function(df, var_reg, varname, path, title){
+  q2_total <- lm(paste(var_reg, '~ number + diversity + resources + reliability + dynamics + closeness_village +
+                   attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household'),
+                 data = df)
+  
+  q2_heterogeneous <- lm(paste(var_reg, '~ number + diversity + resources + reliability + dynamics + closeness_village +
+                   attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household + as.factor(hohh_gender_female) + migrated + returnee'),
+                 data = df)
+
+  q2_sconnect <- lm(paste(var_reg, '~ number + diversity + resources + reliability + dynamics + as.factor(district)+ as.factor(subcounty) + n_household'),
+                 data = df)
+
+  q2_scohesion <- lm(paste(var_reg, '~ closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household'),
+                 data = df)
+  
+  stargazer(q2_sconnect, q2_scohesion, q2_total, q2_heterogeneous,
+            title = title,
+            covariate.labels = c('<b>Social Connectedness</b> <BR> Number', 
+                               'Diversity', 
+                               'Resources', 
+                               'Reliability', 
+                               'Dynamics',
+                               '<b>Social Cohesion</b> <BR> Village closeness', 
+                               'Attitudes other ethnics', 
+                               '<b>Heterogenous effects</b> <BR> Female head of household',
+                               'Household has migrated',
+                               'Household returnee',
+                               'Constant'),
+          dep.var.caption = varname,
+          notes = 'Controls: distric, subcountry, number of people in the household',
+          omit=c("district", "subcounty", "n_household"),
+          add.lines=list(c("Controls", "Yes", "Yes", "Yes", "Yes")),
+          dep.var.labels.include = FALSE,
+          column.labels = c('Social connectedness',
+                            'Social cohesion',
+                            'Social connectedness <BR> cohesion',
+                            'Heterogenous effects'), 
+          type = 'html',
+          out=paste('./Results/Regression/', path))
+  }
+
+# Access to services
+
+regression_q2(wave_4, 'access_services', 'Access to services', 'q2_acess.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# FCI
+
+regression_q2(wave_4, 'fci', 'Food Consumption Index (FCI)', 'q2_fci.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Diversity
+
+regression_q2(wave_4, 'diversity_food', 'Diversity Food Index', 'q2_diversity_food.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Livestock ownership 
+
+regression_q2(wave_4, 'livestock_ownership', 'Livestock ownership Index', 'q2_livestock_ownership.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Subjective resilience 
+
+regression_q2(wave_4, 'subjective_resilience', 'Subjective Resilience', 'q2_subjective_resilience.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Remittances
+
+regression_q2(wave_4, 'remittances', 'Remittances', 'q2_remittances.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Income Sources
+
+regression_q2(wave_4, 'income_sources', 'Income sources', 'q2_income_sources.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Morris Index
+
+regression_q2(wave_4, 'morris_index_total', 'Morris Index (Assets)', 'q2_morris_index_total.html', 'Relationship between social connectedness and connection and wellbeing')
+
+```
+
+## Question 3: What factors appear to explain variations in levels of social connectedness and cohesion?
+
+```{r, echo=FALSE, results='asis'}
+
+# Function
+
+regression_q3_zoom_in <- function(df, var_reg, varname, path, title){
+
+  q3_shock <- lm(paste(var_reg, '~ climate_shock + economic_shock + conflict_shock + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female)'),
+                 data = df)
+  
+  q3_migration <- lm(paste(var_reg, '~ migrated + returnee + member_abroad + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female)'),
+                 data = df)
+  
+  q3_aid <- lm(paste(var_reg, '~ aid_types + aid_amount_shrink + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female)'),
+                 data = df)
+  
+  q3_migration_aid <- lm(paste(var_reg, '~ migrated + returnee + member_abroad + aid_types + aid_amount_shrink + remittances + aid_types:migrated + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female)'),
+                 data = df)
+  
+  stargazer(q3_shock, q3_migration, q3_aid, q3_migration_aid,
+          dep.var.caption = varname,
+          title = title,
+          notes = 'Controls: distric, subcountry, number of people in the household, Morris Index (Assest), and Livestock Ownership Index',
+          omit=c("district", "subcounty", "n_household", "morris_index_total", "livestock_ownership"),
+          add.lines=list(c("Control", "Yes", "Yes", "Yes", 'Yes')),
+          covariate.labels = c('<b>Shocks and safety</b> <BR> Climate shock', 
+                               'Economic shock', 
+                               'Conflict sock', 
+                               'Safety index', 
+                               '<b>Migration</b> <BR> Household has migrated', 
+                               'Household is returnee',
+                               'Household has member abroad',
+                               '<b>Aid</b> <BR> Aid types',
+                               'Aid amount',
+                               'Remittances',
+                               '<b>Interactions</b> <BR> Aid types x Household has migrated',
+                               'Constant'),
+          dep.var.labels.include = FALSE,
+          column.labels = c('Shocks', 'Migration', 'Aid', 'Migration <BR> and aid'), 
+          type = 'html',
+          out=paste('./Results/Regression/', path))
+}
+
+regression_q3 <- function(df, var_reg, varname, path, title){
+
+  q3_nohet <- lm(paste(var_reg, '~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + returnee + member_abroad + aid_types + aid_amount_shrink + remittances + aid_types:migrated + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female) + morris_index_total + livestock_ownership'),
+                 data = df)
+  
+  q3_total <- lm(paste(var_reg, '~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + returnee + member_abroad + aid_types + aid_amount_shrink + remittances + aid_types:migrated + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female) + morris_index_total + livestock_ownership'),
+                 data = df)
+
+  stargazer(q3_nohet, q3_total,
+          dep.var.caption = varname,
+          title = title,
+          notes = 'Controls: distric, subcountry, number of people in the household, Morris Index (Assest), and Livestock Ownership Index',
+          omit=c("district", "subcounty", "n_household", "morris_index_total", "livestock_ownership"),
+          add.lines=list(c("Control", "Yes", "Yes", "Yes", 'Yes')),
+          covariate.labels = c('<b>Shocks and safety</b> <BR> Climate shock', 
+                               'Economic shock', 
+                               'Conflict sock', 
+                               'Safety index', 
+                               '<b>Migration</b> <BR> Household has migrated', 
+                               'Household is returnee',
+                               'Household has member abroad',
+                               '<b>Aid</b> <BR> Aid types',
+                               'Aid amount',
+                               'Remittances',
+                               '<b>Heterogenous effects</b> <BR> Female head of household',
+                               '<b>Interactions</b> <BR> Aid types x Household has migrated',
+                               'Female head of household x Household has migrated',
+                               'Constant'),
+          dep.var.labels.include = FALSE,
+          column.labels = c('Wellbeing', 'Wellbeing with <BR> heterogenous effects'), 
+          type = 'html',
+          out=paste('./Results/Regression/', path))
+  }
+          
+# Number
+
+regression_q3_zoom_in(wave_4, 'number', 'Number', 'q3_number_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'number', 'Number', 'q3_number.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Diversity 
+regression_q3_zoom_in(wave_4, 'diversity', 'Diversity', 'q3_diversity_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'diversity', 'Diversity', 'q3_diversity.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Resources
+regression_q3_zoom_in(wave_4, 'resources', 'Resources', 'q3_diversity_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'resources', 'Resources', 'q3_resources.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Reliability
+regression_q3_zoom_in(wave_4, 'reliability', 'Reliability', 'q3_reliability_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'reliability', 'Reliability', 'q3_reliability.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Dynamics
+regression_q3_zoom_in(wave_4, 'dynamics', 'Dynamics', 'q3_dynamics_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'dynamics', 'Dynamics', 'q3_dynamics.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Closeness village
+regression_q3_zoom_in(wave_4, 'closeness_village', 'Village closeness', 'q3_closeness_village_zoomin.html', 'Relationship between social cohesion and shocks, aid, and migration')
+regression_q3(wave_4, 'closeness_village', 'Village closeness', 'q3_closeness_village.html', 'Relationship between social cohesion and shocks, aid, and migration')
+
+# Attitudes
+regression_q3_zoom_in(wave_4, 'attitudes_trust_other_ethnics', 'Attitudes other ethnics', 'q3_attitudes_zoomin.html', 'Relationship between social cohesion and shocks, aid, and migration')
+regression_q3(wave_4, 'attitudes_trust_other_ethnics', 'Attitudes other ethnics', 'q3_attitudes.html', 'Relationship between social cohesion and shocks, aid, and migration')
+
+```
+
+

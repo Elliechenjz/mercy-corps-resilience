@@ -1,0 +1,129 @@
+---
+title: "Untitled"
+author: "Desiree Becerra"
+date: '2023-02-06'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document:
+    keep_tex: yes
+header-includes: \usepackage{dcolumn}
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(haven)
+library(corrplot)
+library(stargazer)
+library(Hmisc)
+
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+wave_4 <- read.csv(file = "./Data/Clean data/wave_4_indicators_byhousehold.csv")
+```
+
+
+## Regression
+Independent Variables: Social Cohesion, Social Connectedness
+Dependent Variables: Livelihood, Safety, Subjective Resilience, Food Security
+
+Question: Do social connectedness and cohesion associate with wellbeing (as measured in Wave 4)? If so, how, and for who?
+This part is answering the association
+```{r}
+
+# Livelihood: access_services/livestock_ownership/income_sources/remittences
+# food security: fci/diversity_food
+# safety: safety_index
+# subjective resilience: subjective_resilience
+
+
+## Livelihood: how sc&sc associate with livelihood 
+q2_model_1 <- lm(access_services ~ 
+                   number + diversity + resources + reliability + dynamics + 
+                   closeness_village + attitudes_trust_other_ethnics + 
+                   as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_2 <- lm(livestock_ownership ~  
+                   number + diversity + resources + reliability + dynamics + 
+                   closeness_village + attitudes_trust_other_ethnics + 
+                   as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_3 <- lm(remittances ~ 
+                   number + diversity + resources + reliability + dynamics + 
+                   closeness_village + attitudes_trust_other_ethnics + 
+                   as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_4 <- lm(income_sources ~ 
+                    number + diversity + resources + reliability + dynamics + 
+                    closeness_village + attitudes_trust_other_ethnics + 
+                    as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_5 <- lm(morris_index_total ~ 
+                    number + diversity + resources + reliability + dynamics + 
+                    closeness_village + attitudes_trust_other_ethnics + 
+                    as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+# food security: how sc&sc associate with food security 
+q2_model_6 <- lm(fci ~ 
+                   number + diversity + resources + reliability + dynamics + 
+                   closeness_village + attitudes_trust_other_ethnics + 
+                   as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_7 <- lm(diversity_food ~ 
+                   number + diversity + resources + reliability + dynamics + 
+                   closeness_village + attitudes_trust_other_ethnics + 
+                   as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+# subjective resilience: how sc&sc associate with subjective resilience
+q2_model_8 <- lm(subjective_resilience ~ 
+                   number + diversity + resources + reliability + dynamics + 
+                   closeness_village + attitudes_trust_other_ethnics + 
+                   as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+# safety: how sc&sc associate with safety
+q2_model_9 <- lm(safety_index ~ 
+                    number + diversity + resources + reliability + dynamics + 
+                    closeness_village + attitudes_trust_other_ethnics + 
+                    as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+```
+
+
+
+```{r mylatextable, results = 'asis'}
+
+#stargazer(q3_model_scoh_1, q3_model_scoh_2,  title="Variables that affect Social Cohesion", align=TRUE, type = 'html', out="tbl2.html" , no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female","morris_index_total","livestock_ownership"), omit.labels = c("district", "subcounty", "# of People in HH", "Female Head of Household", "HH Wealth", "Livestock Ownership"))
+
+
+stargazer(q2_model_1, q2_model_2, q2_model_3, q2_model_4,  q2_model_5, 
+          title="Social Connectedness and Social Cohesion affect livelihood", 
+          align=TRUE, type = 'html', out="tb_scsc_livelihood.html", no.space = TRUE, 
+          omit=c("district", "subcounty", "n\\_household", "hohh\\_gender_female"), 
+          omit.labels = c("district", "subcounty", "# of People in HH", "Female Head of Household"))
+
+stargazer(q2_model_6, q2_model_7, 
+          title="Social Connectedness and Social Cohesion affect Food Security", 
+          align=TRUE, type = 'html', out="tb_scsc_food_security.html", no.space = TRUE, 
+          omit=c("district", "subcounty", "n\\_household", "hohh\\_gender\\_female"), 
+          omit.labels = c("district", "subcounty", "# of People in HH", "Female Head of Household"))
+
+stargazer(q2_model_8, q2_model_9, 
+          title="Social Connectedness and Social Cohesion affect Subjective Resilience and Safety", 
+          align=TRUE, type = 'html', out="tb_scsc_subjresil_safety.html", no.space = TRUE, 
+          omit=c("district", "subcounty", "n\\_household", "hohh\\_gender\\_female"), 
+          omit.labels = c("district", "subcounty", "# of People in HH", "Female Head of Household"))
+
+# , align=TRUE
+```
+

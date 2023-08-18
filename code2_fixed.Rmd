@@ -1,0 +1,222 @@
+---
+title: "Regression analysis"
+author: "Mercy corps team"
+date: "2023-02-20"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    keep_tex: yes
+header-includes: \usepackage{dcolumn}
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(haven)
+library(corrplot)
+library(stargazer)
+library(Hmisc)
+library(plm)
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+# Remove all
+rm(list = ls())
+
+wave_4 <- read.csv(file = "./Data/Clean data/wave_4_indicators_byhousehold.csv")
+```
+
+# Question 2: Do social connectedness and cohesion associate with wellbeing (as measured in Wave 4)?
+
+## Regression 
+
+```{r, echo=FALSE, results='asis'}
+
+# Function
+
+regression_q2 <- function(df, var_reg, varname, path, title){
+  q2_total <- lm(paste(var_reg, '~ number + diversity + resources + reliability + dynamics + closeness_village +
+                   attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household'),
+                 data = df)
+  
+  q2_heterogeneous <- lm(paste(var_reg, '~ number + diversity + resources + reliability + dynamics + closeness_village +
+                   attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household + as.factor(hohh_gender_female) + migrated + returnee'),
+                 data = df)
+
+  q2_sconnect <- lm(paste(var_reg, '~ number + diversity + resources + reliability + dynamics + as.factor(district)+ as.factor(subcounty) + n_household'),
+                 data = df)
+
+  q2_scohesion <- lm(paste(var_reg, '~ closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household'),
+                 data = df)
+  
+  stargazer(q2_sconnect, q2_scohesion, q2_total, q2_heterogeneous,
+            title = title,
+            covariate.labels = c('<b>Social Connectedness</b> <BR> Number', 
+                               'Diversity', 
+                               'Resources', 
+                               'Reliability', 
+                               'Dynamics',
+                               '<b>Social Cohesion</b> <BR> Village closeness', 
+                               'Attitudes other ethnics', 
+                               '<b>Heterogenous effects</b> <BR> Female head of household',
+                               'Household has migrated',
+                               'Household returnee',
+                               'Constant'),
+          dep.var.caption = varname,
+          notes = 'Controls: distric, subcountry, number of people in the household',
+          omit=c("district", "subcounty", "n_household"),
+          add.lines=list(c("Controls", "Yes", "Yes", "Yes", "Yes")),
+          dep.var.labels.include = FALSE,
+          column.labels = c('Social connectedness',
+                            'Social cohesion',
+                            'Social connectedness <BR> cohesion',
+                            'Heterogenous effects'), 
+          type = 'html',
+          out=paste('./Results/Regression/', path))
+  }
+
+# Access to services
+
+regression_q2(wave_4, 'access_services', 'Access to services', 'q2_acess.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# FCI
+
+regression_q2(wave_4, 'fci', 'Food Consumption Index (FCI)', 'q2_fci.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Diversity
+
+regression_q2(wave_4, 'diversity_food', 'Diversity Food Index', 'q2_diversity_food.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Livestock ownership 
+
+regression_q2(wave_4, 'livestock_ownership', 'Livestock ownership Index', 'q2_livestock_ownership.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Subjective resilience 
+
+regression_q2(wave_4, 'subjective_resilience', 'Subjective Resilience', 'q2_subjective_resilience.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Remittances
+
+regression_q2(wave_4, 'remittances', 'Remittances', 'q2_remittances.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Income Sources
+
+regression_q2(wave_4, 'income_sources', 'Income sources', 'q2_income_sources.html', 'Relationship between social connectedness and connection and wellbeing')
+
+# Morris Index
+
+regression_q2(wave_4, 'morris_index_total', 'Morris Index (Assets)', 'q2_morris_index_total.html', 'Relationship between social connectedness and connection and wellbeing')
+
+```
+
+# Question 3: What factors appear to explain variations in levels of social connectedness and cohesion?
+
+## Regression 
+
+```{r, echo=FALSE, results='asis'}
+
+# Function
+
+regression_q3_zoom_in <- function(df, var_reg, varname, path, title){
+
+  q3_shock <- lm(paste(var_reg, '~ climate_shock + economic_shock + conflict_shock + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female)'),
+                 data = df)
+  
+  q3_migration <- lm(paste(var_reg, '~ migrated + returnee + member_abroad + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female)'),
+                 data = df)
+  
+  q3_aid <- lm(paste(var_reg, '~ aid_types + aid_amount_shrink + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female)'),
+                 data = df)
+  
+  q3_migration_aid <- lm(paste(var_reg, '~ migrated + returnee + member_abroad + aid_types + aid_amount_shrink + remittances + aid_types:migrated + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female)'),
+                 data = df)
+  
+  stargazer(q3_shock, q3_migration, q3_aid, q3_migration_aid,
+          dep.var.caption = varname,
+          title = title,
+          notes = 'Controls: distric, subcountry, number of people in the household, Morris Index (Assest), and Livestock Ownership Index',
+          omit=c("district", "subcounty", "n_household", "morris_index_total", "livestock_ownership"),
+          add.lines=list(c("Control", "Yes", "Yes", "Yes", 'Yes')),
+          covariate.labels = c('<b>Shocks and safety</b> <BR> Climate shock', 
+                               'Economic shock', 
+                               'Conflict sock', 
+                               'Safety index', 
+                               '<b>Migration</b> <BR> Household has migrated', 
+                               'Household is returnee',
+                               'Household has member abroad',
+                               '<b>Aid</b> <BR> Aid types',
+                               'Aid amount',
+                               'Remittances',
+                               '<b>Interactions</b> <BR> Aid types x Household has migrated',
+                               'Constant'),
+          dep.var.labels.include = FALSE,
+          column.labels = c('Shocks', 'Migration', 'Aid', 'Migration <BR> and aid'), 
+          type = 'html',
+          out=paste('./Results/Regression/', path))
+}
+
+regression_q3 <- function(df, var_reg, varname, path, title){
+
+  q3_nohet <- lm(paste(var_reg, '~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + returnee + member_abroad + aid_types + aid_amount_shrink + remittances + aid_types:migrated + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female) + morris_index_total + livestock_ownership'),
+                 data = df)
+  
+  q3_total <- lm(paste(var_reg, '~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + returnee + member_abroad + aid_types + aid_amount_shrink + remittances + aid_types:migrated + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female) + morris_index_total + livestock_ownership'),
+                 data = df)
+
+  stargazer(q3_nohet, q3_total,
+          dep.var.caption = varname,
+          title = title,
+          notes = 'Controls: distric, subcountry, number of people in the household, Morris Index (Assest), and Livestock Ownership Index',
+          omit=c("district", "subcounty", "n_household", "morris_index_total", "livestock_ownership"),
+          add.lines=list(c("Control", "Yes", "Yes", "Yes", 'Yes')),
+          covariate.labels = c('<b>Shocks and safety</b> <BR> Climate shock', 
+                               'Economic shock', 
+                               'Conflict sock', 
+                               'Safety index', 
+                               '<b>Migration</b> <BR> Household has migrated', 
+                               'Household is returnee',
+                               'Household has member abroad',
+                               '<b>Aid</b> <BR> Aid types',
+                               'Aid amount',
+                               'Remittances',
+                               '<b>Heterogenous effects</b> <BR> Female head of household',
+                               '<b>Interactions</b> <BR> Aid types x Household has migrated',
+                               'Female head of household x Household has migrated',
+                               'Constant'),
+          dep.var.labels.include = FALSE,
+          column.labels = c('Wellbeing', 'Wellbeing with <BR> heterogenous effects'), 
+          type = 'html',
+          out=paste('./Results/Regression/', path))
+  }
+          
+# Number
+
+regression_q3_zoom_in(wave_4, 'number', 'Number', 'q3_number_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'number', 'Number', 'q3_number.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Diversity 
+regression_q3_zoom_in(wave_4, 'diversity', 'Diversity', 'q3_diversity_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'diversity', 'Diversity', 'q3_diversity.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Resources
+regression_q3_zoom_in(wave_4, 'resources', 'Resources', 'q3_diversity_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'resources', 'Resources', 'q3_resources.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Reliability
+regression_q3_zoom_in(wave_4, 'reliability', 'Reliability', 'q3_reliability_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'reliability', 'Reliability', 'q3_reliability.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Dynamics
+regression_q3_zoom_in(wave_4, 'dynamics', 'Dynamics', 'q3_dynamics_zoomin.html', 'Relationship between social connectedness and shocks, aid, and migration')
+regression_q3(wave_4, 'dynamics', 'Dynamics', 'q3_dynamics.html', 'Relationship between social connectedness and shocks, aid, and migration')
+
+# Closeness village
+regression_q3_zoom_in(wave_4, 'closeness_village', 'Village closeness', 'q3_closeness_village_zoomin.html', 'Relationship between social cohesion and shocks, aid, and migration')
+regression_q3(wave_4, 'closeness_village', 'Village closeness', 'q3_closeness_village.html', 'Relationship between social cohesion and shocks, aid, and migration')
+
+# Attitudes
+regression_q3_zoom_in(wave_4, 'attitudes_trust_other_ethnics', 'Attitudes other ethnics', 'q3_attitudes_zoomin.html', 'Relationship between social cohesion and shocks, aid, and migration')
+regression_q3(wave_4, 'attitudes_trust_other_ethnics', 'Attitudes other ethnics', 'q3_attitudes.html', 'Relationship between social cohesion and shocks, aid, and migration')
+
+```
+

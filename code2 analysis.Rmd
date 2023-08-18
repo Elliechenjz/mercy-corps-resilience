@@ -1,0 +1,262 @@
+---
+title: "Untitled"
+author: "Desiree Becerra"
+date: '2023-02-06'
+output:
+  pdf_document:
+    keep_tex: true
+header-includes:
+   - \usepackage{dcolumn}
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(haven)
+library(corrplot)
+library(stargazer)
+library(Hmisc)
+library(plm)
+
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+wave_4 <- read.csv(file = "./Data/Clean data/wave_4_indicators_byhousehold.csv")
+```
+
+## Correlation matrix
+
+```{r}
+correlation_plot <- function(df, title){
+    corr_matrix <- cor(df, 
+                   method = 'pearson', 
+                   use = 'pairwise.complete.obs')
+    p_value_matrix <- rcorr(as.matrix(df), type="pearson")$P
+    corrplot(corr_matrix,
+         method = 'color',
+         type = 'upper',
+         addCoef.col = 'black',
+         tl.col='black',
+         number.cex = 0.5,
+         tl.cex = 0.5,
+         p.mat = p_value_matrix, 
+         sig.level = 0.05,
+         diag = FALSE, 
+         pch.col = 'grey80',
+         title = paste('Relationship between', title),
+         mar = c(0,0,1,0))
+    }
+
+social_connectedness <- wave_4 %>%
+  dplyr::select(number, diversity, resources, reliability, dynamics)
+
+correlation_plot(social_connectedness, 'social connectedness index')
+
+q1 <- wave_4 %>%
+  dplyr::select(number, diversity, resources, reliability, dynamics, 
+                closeness_village, attitudes_trust_other_ethnics)
+correlation_plot(q1, 'social connectedness and social cohesion')
+
+q2_1 <- wave_4 %>%
+  dplyr::select(number, diversity, resources, reliability, dynamics, livestock_ownership, 
+                access_services, fci, diversity_food, subjective_resilience, 
+                remittances, income_sources, morris_index_total)
+correlation_plot(q2_1, 'social connectedness and wellbeign')
+
+q2_2 <- wave_4 %>%
+  dplyr::select(closeness_village, attitudes_trust_other_ethnics,
+                livestock_ownership, access_services, 
+                fci, diversity_food, subjective_resilience, remittances, 
+                income_sources, morris_index_total)
+correlation_plot(q2_2, 'social cohesion and wellbeign')
+
+q3_SCtd_1 <- wave_4 %>%
+  dplyr::select(number, diversity, resources, reliability, dynamics, 
+                climate_shock, economic_shock, conflict_shock, safety_index,  
+                )
+correlation_plot(q3_SCtd_1, 'social connectedness and shocks and safety')
+
+q3_SCtd_2 <- wave_4 %>%
+  dplyr::select(number, diversity, resources, reliability, dynamics, 
+                 aid_amount, aid_types, remittances  
+                )
+correlation_plot(q3_SCtd_2, 'social connectedness and aid and remittances')
+
+q3_SCtd_3 <- wave_4 %>%
+  dplyr::select(number, diversity, resources, reliability, dynamics, 
+                morris_index_total, livestock_ownership  
+                )
+correlation_plot(q3_SCtd_3, 'social connectedness and wealth')
+
+q3_SChsn_1 <- wave_4 %>%
+  dplyr::select(closeness_village, attitudes_trust_other_ethnics, 
+                climate_shock, economic_shock, conflict_shock, safety_index,  
+                )
+correlation_plot(q3_SChsn_1, 'social cohesion and shocks and safety')
+
+q3_SChsn_2 <- wave_4 %>%
+  dplyr::select(closeness_village, attitudes_trust_other_ethnics, 
+                aid_amount, aid_types, remittances)
+correlation_plot(q3_SChsn_2, 'social cohesion and aid and remittances')
+
+q3_SChsn_3 <- wave_4 %>%
+  dplyr::select(closeness_village, attitudes_trust_other_ethnics, 
+                morris_index_total, livestock_ownership)
+correlation_plot(q3_SChsn_3, 'social cohesion and wealth')
+
+```
+
+## Regression
+
+
+```{r, results='asis'}
+
+q2_model_1 <- lm(access_services ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_2 <- lm(access_services ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_3 <- lm(fci ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_4 <- lm(diversity_food ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_5 <- lm(livestock_ownership ~  number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_6 <- lm(access_services ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_7 <- lm(subjective_resilience ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_8 <- lm(remittances ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_9 <- lm(income_sources ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + n_household  + as.factor(hohh_gender_female),
+                    data = wave_4)
+
+q2_model_10 <- lm(income_sources ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_11 <- lm(morris_index_total ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_12 <- lm(morris_index_assets ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+
+stargazer(q2_model_1, q2_model_2, q2_model_3, q2_model_4, align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+stargazer(q2_model_5, q2_model_6, q2_model_7, q2_model_8, align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+stargazer(q2_model_9, q2_model_10, q2_model_11, q2_model_12, align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+
+#### Question 2 with controls
+
+
+q2_model_1 <- lm(livestock_ownership ~  number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics + hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_2 <- lm(access_services ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female  + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_3 <- lm(fci ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female +  as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_4 <- lm(diversity_food ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female  + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_5 <- lm(livestock_ownership ~  number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_6 <- lm(access_services ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4,
+                 omit = c("district", "subcounty"))
+
+q2_model_7 <- lm(subjective_resilience ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4, 
+                 omit = c("district", "subcounty"))
+
+q2_model_8 <- lm(remittances ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_9 <- lm(income_sources ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_10 <- lm(income_sources ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                  data = wave_4)
+
+q2_model_11 <- lm(morris_index_total ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q2_model_12 <- lm(morris_index_assets ~ number + diversity + resources + reliability + dynamics + closeness_village + attitudes_trust_other_ethnics+ hohh_gender_female + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                  data = wave_4)
+
+
+stargazer(q2_model_1, q2_model_2, q2_model_3, q2_model_4, align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+stargazer(q2_model_5, q2_model_6, q2_model_7, q2_model_8, align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+stargazer(q2_model_9, q2_model_10, q2_model_11, q2_model_12, align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+#### Question 3 Model 1 - ALL
+
+q3_model_sc_1 <- lm(number ~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + native + aid_amount, aid_types + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q3_model_sc_2 <- lm(diversity ~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + native + aid_amount, aid_types + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q3_model_sc_3 <- lm(resources ~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + native + aid_amount, aid_types + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q3_model_sc_4 <- lm(reliability ~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + native + aid_amount, aid_types + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q3_model_sc_5 <- lm(dynamics ~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + native + aid_amount, aid_types + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+stargazer(q3_model_sc_1, q3_model_sc_2, q3_model_sc_3,  title="Results", align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+stargazer(q3_model_sc_4, q3_model_sc_5,  title="Results", align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+q3_model_scoh_1 <- lm(closeness_village ~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + native + aid_amount, aid_types + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q3_model_scoh_2 <- lm(attitudes_trust_other_ethnics ~ climate_shock + economic_shock + conflict_shock + safety_index + migrated + native + aid_amount, aid_types + remittances + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+stargazer(q3_model_scoh_1, q3_model_scoh_2,  title="Results", align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+#### Question 3 Model 1 - SHOCKS
+
+q3_model_sc_1 <- lm(number ~ climate_shock + economic_shock + conflict_shock + safety_index + as.factor(district) + as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q3_model_sc_2 <- lm(diversity ~ climate_shock + economic_shock + conflict_shock + safety_index + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q3_model_sc_3 <- lm(resources ~ climate_shock + economic_shock + conflict_shock + safety_index + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+q3_model_sc_4 <- lm(reliability ~ climate_shock + economic_shock + conflict_shock + safety_index + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                    data = wave_4)
+
+q3_model_sc_5 <- lm(dynamics ~ climate_shock + economic_shock + conflict_shock + safety_index + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+stargazer(q3_model_sc_1, q3_model_sc_2, q3_model_sc_3,  title="Results", align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+stargazer(q3_model_sc_4, q3_model_sc_5,  title="Results", align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))
+
+q3_model_scoh_1 <- lm(closeness_village ~ climate_shock + economic_shock + conflict_shock + safety_index + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+
+q3_model_scoh_2 <- lm(attitudes_trust_other_ethnics ~ climate_shock + economic_shock + conflict_shock + as.factor(district)+ as.factor(subcounty) + n_household  + as.factor(hohh_gender_female),
+                 data = wave_4)
+
+stargazer(q3_model_scoh_1, q3_model_scoh_2,  title="Results", align=TRUE, type = 'latex', no.space = TRUE, omit=c("district", "subcounty", "n_household", "hohh_gender_female"), omit.labels = c("district", "subcounty", "persons_per_household", "head_household_female"))`
+
+```
